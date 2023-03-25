@@ -1,0 +1,29 @@
+name: Tag from upstream
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 1 */2 *'
+jobs:
+  tag_upstream_release:
+    name: Tag latest upstream release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout downstream
+        uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.PUSH_TAG_PAT }}
+      - name: Get latest local tag
+        id: local_release
+        uses: actions-ecosystem/action-get-latest-tag@v1
+      - name: Get latest upstream release tag
+        uses: rez0n/actions-github-release@main
+        id: homepage_release
+        env:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: benphelps/homepage
+          type: stable
+      - name: Tag release if new
+        uses: actions-ecosystem/action-push-tag@v1 
+        if: ${{ !contains(steps.local_release.outputs.tag, steps.homepage_release.outputs.release) }}
+        with:
+          tag: ${{ steps.homepage_release.outputs.release }}-mod000
