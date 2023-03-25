@@ -1,0 +1,152 @@
+From e230655eb08da38b3cb44e74e7afa05d93ee31f7 Mon Sep 17 00:00:00 2001
+From: Your Name <1446775+jacaru@users.noreply.github.com>
+Date: Sat, 25 Mar 2023 19:38:41 +0100
+Subject: [PATCH 4/4] Support custom basePath at runtime.
+
+next.js supports defining a custom base path at runtime. With some sed
+trickery we can support it at runtime the first time a container
+instance is created with new environment variable NEXT_PUBLIC_BASEPATH.
+---
+ Dockerfile.basepath  | 71 ++++++++++++++++++++++++++++++++++++++++++++
+ docker-entrypoint.sh |  2 ++
+ next.config.js       |  1 +
+ set_basepath.sh      | 24 +++++++++++++++
+ 4 files changed, 98 insertions(+)
+ create mode 100644 Dockerfile.basepath
+ create mode 100755 set_basepath.sh
+
+diff --git a/Dockerfile.basepath b/Dockerfile.basepath
+new file mode 100644
+index 00000000..368bfcad
+--- /dev/null
++++ b/Dockerfile.basepath
+@@ -0,0 +1,71 @@
++# syntax = docker/dockerfile:latest
++
++# Install dependencies only when needed
++FROM docker.io/node:18-alpine AS deps
++
++WORKDIR /app
++
++COPY --link package.json pnpm-lock.yaml* ./
++
++SHELL ["/bin/ash", "-xeo", "pipefail", "-c"]
++RUN apk add --no-cache libc6-compat \
++ && apk add --no-cache --virtual .gyp python3 make g++ \
++ && npm install -g pnpm
++
++RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store pnpm fetch | grep -v "cross-device link not permitted\|Falling back to copying packages from store"
++
++RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store pnpm install -r --offline
++
++# Rebuild the source code only when needed
++FROM docker.io/node:18-alpine AS builder
++WORKDIR /app
++
++ARG BUILDTIME
++ARG VERSION
++ARG REVISION
++
++#ARG BASEPATH=/homepage
++
++COPY --link --from=deps /app/node_modules ./node_modules/
++COPY . .
++
++SHELL ["/bin/ash", "-xeo", "pipefail", "-c"]
++RUN npm run telemetry \
++ && mkdir config && echo '---' > config/settings.yaml \
++ && NEXT_PUBLIC_BASEPATH=/__BASEPATH__ NEXT_PUBLIC_BUILDTIME=$BUILDTIME NEXT_PUBLIC_VERSION=$VERSION NEXT_PUBLIC_REVISION=$REVISION npm run build
++
++# Production image, copy all the files and run next
++FROM docker.io/node:18-alpine AS runner
++LABEL org.opencontainers.image.title "Homepage"
++LABEL org.opencontainers.image.description "A self-hosted services landing page, with docker and service integrations."
++LABEL org.opencontainers.image.url="https://github.com/benphelps/homepage"
++LABEL org.opencontainers.image.documentation='https://github.com/benphelps/homepage/wiki'
++LABEL org.opencontainers.image.source='https://github.com/benphelps/homepage'
++LABEL org.opencontainers.image.licenses='Apache-2.0'
++
++ENV NODE_ENV production
++
++#ARG BASEPATH=/homepage
++#ENV NEXT_PUBLIC_BASEPATH=$BASEPATH
++
++WORKDIR /app
++
++# Copy files from context (this allows the files to copy before the builder stage is done).
++COPY --link --chown=1000:1000 package.json next.config.js ./
++COPY --link --chown=1000:1000 /public ./public/
++
++# Copy files from builder
++COPY --link --from=builder --chown=1000:1000 /app/.next/standalone ./
++COPY --link --from=builder --chown=1000:1000 /app/.next/static/ ./.next/static/
++COPY --link --chmod=755 docker-entrypoint.sh set_basepath.sh /usr/local/bin/
++
++RUN apk add --no-cache su-exec jq
++
++ENV PORT 3000
++EXPOSE $PORT
++
++HEALTHCHECK --interval=10s --timeout=3s --start-period=20s \
++  CMD wget --no-verbose --tries=1 --spider --no-check-certificate http://localhost:$PORT/api/healthcheck || exit 1
++
++ENTRYPOINT ["docker-entrypoint.sh"]
++CMD ["node", "server.js"]
+diff --git a/docker-entrypoint.sh b/docker-entrypoint.sh
+index bf443461..f414b299 100755
+--- a/docker-entrypoint.sh
++++ b/docker-entrypoint.sh
+@@ -10,6 +10,8 @@ export PGID=${PGID:-0}
+ # while also supporting the lscr.io /config directory
+ [ ! -d "/app/config" ] && ln -s /config /app/config
+ 
++command -v "set_basepath.sh" > /dev/null && set_basepath.sh
++
+ # Set privileges for /app but only if pid 1 user is root and we are dropping privileges.
+ # If container is run as an unprivileged user, it means owner already handled ownership setup on their own.
+ # Running chown in that case (as non-root) will cause error
+diff --git a/next.config.js b/next.config.js
+index e2efad75..79ceaa14 100644
+--- a/next.config.js
++++ b/next.config.js
+@@ -3,6 +3,7 @@ const { i18n } = require("./next-i18next.config");
+ /** @type {import('next').NextConfig} */
+ const nextConfig = {
+   trailingSlash: true,
++  basePath: process.env.NEXT_PUBLIC_BASEPATH || undefined,
+   reactStrictMode: true,
+   output: "standalone",
+   swcMinify: false,
+diff --git a/set_basepath.sh b/set_basepath.sh
+new file mode 100755
+index 00000000..a81bd86d
+--- /dev/null
++++ b/set_basepath.sh
+@@ -0,0 +1,24 @@
++
++#!/bin/sh
++
++# replace /__BASEPATH__ with the runtime-configured entrypoint
++if [ "$NEXT_PUBLIC_BASEPATH" = "" ]; then
++  # root entrypoint is handled differently from non-root, in particular
++  #  - basePath="" rather than "/"
++  #  - an extra redirect is added /x/ => /x -- but with root that would be // => / which is invalid
++  cp .next/routes-manifest.json .next/routes-manifest.json.in
++  jq -rc '.basePath = ""
++    | .redirects = [
++        .redirects
++        | .[]
++        | select((.source == "/__BASEPATH__/" and .destination == "/__BASEPATH__") | not)
++      ]' .next/routes-manifest.json.in > .next/routes-manifest.json
++fi
++# first we look for /__BASEPATH__/ -- this should become / in the case of empty entrypoint
++#  then we look for /__BASEPATH__ -- this should become "" in the case of empty entrypoint
++find .next server.js \
++  -type f \
++  -exec sed -i \
++    -e "s#/__BASEPATH__/#${NEXT_PUBLIC_BASEPATH}/#g" \
++    -e "s#/__BASEPATH__#${NEXT_PUBLIC_BASEPATH}#g" \
++    {} +
+-- 
+2.30.2
+

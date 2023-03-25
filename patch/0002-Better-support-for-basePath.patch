@@ -1,0 +1,126 @@
+From e66e1e99db7f3e5adb0ace9c941fe842116d5a24 Mon Sep 17 00:00:00 2001
+From: Your Name <1446775+jacaru@users.noreply.github.com>
+Date: Sat, 25 Mar 2023 19:31:34 +0100
+Subject: [PATCH 2/4] Better support for basePath
+
+next.js let's you configure a base path.  Properly suport this option is
+some bits of the application itself.
+---
+ src/components/toggles/revalidate.jsx |  4 +++-
+ src/pages/_app.jsx                    |  7 ++-----
+ src/pages/api/revalidate.js           |  6 ++++--
+ src/pages/index.jsx                   |  5 +++--
+ src/utils/fetcher.js                  | 14 ++++++++++++++
+ 5 files changed, 26 insertions(+), 10 deletions(-)
+ create mode 100644 src/utils/fetcher.js
+
+diff --git a/src/components/toggles/revalidate.jsx b/src/components/toggles/revalidate.jsx
+index 9e436fa2..51c5c13e 100644
+--- a/src/components/toggles/revalidate.jsx
++++ b/src/components/toggles/revalidate.jsx
+@@ -1,8 +1,10 @@
+ import { MdRefresh } from "react-icons/md";
+ 
++import { fetchWithBase } from "utils/fetcher";
++
+ export default function Revalidate() {
+   const revalidate = () => {
+-    fetch("/api/revalidate").then((res) => {
++    fetchWithBase("/api/revalidate").then((res) => {
+       if (res.ok) {
+         window.location.reload();
+       }
+diff --git a/src/pages/_app.jsx b/src/pages/_app.jsx
+index e99303ab..14179855 100644
+--- a/src/pages/_app.jsx
++++ b/src/pages/_app.jsx
+@@ -8,17 +8,14 @@ import "styles/theme.css";
+ import "styles/manrope.css";
+ import nextI18nextConfig from "../../next-i18next.config";
+ 
++import { fetcherWithBase } from "utils/fetcher";
+ import { ColorProvider } from "utils/contexts/color";
+ import { ThemeProvider } from "utils/contexts/theme";
+ import { SettingsProvider } from "utils/contexts/settings";
+ 
+ function MyApp({ Component, pageProps }) {
+   return (
+-    <SWRConfig
+-      value={{
+-        fetcher: (resource, init) => fetch(resource, init).then((res) => res.json()),
+-      }}
+-    >
++    <SWRConfig value={{ fetcher: fetcherWithBase }}>
+       <Head>
+         {/* https://nextjs.org/docs/messages/no-document-viewport-meta */}
+         <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+diff --git a/src/pages/api/revalidate.js b/src/pages/api/revalidate.js
+index 49d933d4..db937fc6 100644
+--- a/src/pages/api/revalidate.js
++++ b/src/pages/api/revalidate.js
+@@ -1,8 +1,10 @@
++import config from "../../../next.config";
++
+ export default async function handler(req, res) {
+   try {
+-    await res.revalidate("/");
++    await res.revalidate(`${config.basePath}/`);
+     return res.json({ revalidated: true });
+   } catch (err) {
+-    return res.status(500).send("Error revalidating");
++    return res.status(500).send(`Error revalidating: ${err.message}`);
+   }
+ }
+diff --git a/src/pages/index.jsx b/src/pages/index.jsx
+index 00852436..4cdd884f 100644
+--- a/src/pages/index.jsx
++++ b/src/pages/index.jsx
+@@ -12,6 +12,7 @@ import ServicesGroup from "components/services/group";
+ import BookmarksGroup from "components/bookmarks/group";
+ import Widget from "components/widgets/widget";
+ import Revalidate from "components/toggles/revalidate";
++import { fetcherWithBase, fetchWithBase } from "utils/fetcher";
+ import createLogger from "utils/logger";
+ import useWindowFocus from "utils/hooks/window-focus";
+ import { getSettings } from "utils/config/config";
+@@ -104,7 +105,7 @@ function Index({ initialSettings, fallback }) {
+           setStale(true);
+           localStorage.setItem("hash", hashData.hash);
+ 
+-          fetch("/api/revalidate").then((res) => {
++          fetchWithBase("/api/revalidate").then((res) => {
+             if (res.ok) {
+               window.location.reload();
+             }
+@@ -147,7 +148,7 @@ function Index({ initialSettings, fallback }) {
+   }
+ 
+   return (
+-    <SWRConfig value={{ fallback, fetcher: (resource, init) => fetch(resource, init).then((res) => res.json()) }}>
++    <SWRConfig value={{ fallback, fetcher: fetcherWithBase }}>
+       <ErrorBoundary>
+         <Home initialSettings={initialSettings} />
+       </ErrorBoundary>
+diff --git a/src/utils/fetcher.js b/src/utils/fetcher.js
+new file mode 100644
+index 00000000..445dd2cb
+--- /dev/null
++++ b/src/utils/fetcher.js
+@@ -0,0 +1,14 @@
++import config from "../../next.config";
++
++export function fetchWithBase(path, init) {
++  let p = path;
++  const b = config.basePath || "";
++  if (p[0] === "/") p = b + p;
++
++  return fetch(p, init);
++}
++
++export function fetcherWithBase(path, init) {
++  return fetchWithBase(path, init).then((res) => res.json());
++}
++
+-- 
+2.30.2
+
