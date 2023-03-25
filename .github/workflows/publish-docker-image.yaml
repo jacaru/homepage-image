@@ -37,6 +37,8 @@ jobs:
           path: 'homepage'
       - name: Apply downstream homepage patches
         run: |
+          echo $(pwd)
+          ls -1
           cd homepage
           git apply -v ../patch/*
       - name: Set up QEMU
