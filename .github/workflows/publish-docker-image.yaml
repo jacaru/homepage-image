@@ -37,8 +37,6 @@ jobs:
           path: 'homepage'
       - name: Apply downstream homepage patches
         run: |
-          echo $(pwd)
-          ls -1
           cd homepage
           git apply -v ../patch/*
       - name: Set up QEMU
@@ -51,16 +49,11 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Debug
-        run: |
-          echo $(pwd)
-          ls -l1
-          ls -l1 ./homepage
       - name: Build and push
         uses: docker/build-push-action@v4
         with:
-          context: ./homepath
-          file: ./homepath/Dockerfile.basepath
+          context: ./homepage
+          file: ./homepage/Dockerfile.basepath
           platforms: linux/arm/v7
           push: true
           tags: ${{ steps.meta.outputs.tags }}
