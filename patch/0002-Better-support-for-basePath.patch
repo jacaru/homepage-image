@@ -1,7 +1,7 @@
-From e66e1e99db7f3e5adb0ace9c941fe842116d5a24 Mon Sep 17 00:00:00 2001
+From 3a0c5c1802d7956330aba353730c527b6bbc0f61 Mon Sep 17 00:00:00 2001
 From: Your Name <1446775+jacaru@users.noreply.github.com>
 Date: Sat, 25 Mar 2023 19:31:34 +0100
-Subject: [PATCH 2/4] Better support for basePath
+Subject: [PATCH 2/5] Better support for basePath
 
 next.js let's you configure a base path.  Properly suport this option is
 some bits of the application itself.
@@ -72,7 +72,7 @@ index 49d933d4..db937fc6 100644
    }
  }
 diff --git a/src/pages/index.jsx b/src/pages/index.jsx
-index 00852436..4cdd884f 100644
+index fc294c6c..a4bd0e96 100644
 --- a/src/pages/index.jsx
 +++ b/src/pages/index.jsx
 @@ -12,6 +12,7 @@ import ServicesGroup from "components/services/group";

@@ -1,7 +1,7 @@
-From 8f6304184d2a8df0af4aacf836a2a3d20383fa80 Mon Sep 17 00:00:00 2001
+From 7cf7df6a7b4e4bf256f02411a711db97b640aef5 Mon Sep 17 00:00:00 2001
 From: Your Name <1446775+jacaru@users.noreply.github.com>
 Date: Sat, 25 Mar 2023 19:24:48 +0100
-Subject: [PATCH 1/4] Enable trailing slashes
+Subject: [PATCH 1/5] Enable trailing slashes
 
 By default, next.js redirects trailing slash urls to non trailing slash.
 In the worst case, this causes redirect loops in the most typical reverse

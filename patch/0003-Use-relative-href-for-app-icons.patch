@@ -1,7 +1,7 @@
-From 5f2b25463000e287b9475bfe2ad53dfb5de4e722 Mon Sep 17 00:00:00 2001
+From 09510adf07b9571e639873663ddf1267f12cfb81 Mon Sep 17 00:00:00 2001
 From: Your Name <1446775+jacaru@users.noreply.github.com>
 Date: Sat, 25 Mar 2023 19:33:39 +0100
-Subject: [PATCH 3/4] Use relative href for app icons
+Subject: [PATCH 3/5] Use relative href for app icons
 
 While this could be achieved with the BASE URL setting, that is not a
 one stop shop to be able to run this app on a sub-path. I find that
@@ -11,7 +11,7 @@ direcly served assets just work better with a relative path.
  1 file changed, 4 insertions(+), 4 deletions(-)
 
 diff --git a/src/pages/index.jsx b/src/pages/index.jsx
-index 4cdd884f..69337786 100644
+index a4bd0e96..cfd8b692 100644
 --- a/src/pages/index.jsx
 +++ b/src/pages/index.jsx
 @@ -241,10 +241,10 @@ function Home({ initialSettings }) {
