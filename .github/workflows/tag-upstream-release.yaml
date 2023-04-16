@@ -2,7 +2,7 @@ name: Tag from upstream
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 1 */2 *'
+    - cron: '0 0 * * 0'
 jobs:
   tag_upstream_release:
     name: Tag latest upstream release
